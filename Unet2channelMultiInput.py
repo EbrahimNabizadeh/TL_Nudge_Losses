@@ -68,6 +68,9 @@ lab=0.5
 input_shape1=(192, 96,2)
 inputs11 = Input(shape=input_shape1)
 inputs22 = Input(shape=input_shape1)
+inputs33 = Input(shape=input_shape1)
+inputs44 = Input(shape=input_shape1)
+
 
 conv1 = Convolution2D(32, (5, 5), activation='relu', padding='same')(inputs11)
 conv1 = Convolution2D(32, (5, 5), activation='relu', padding='same')(conv1)
@@ -120,21 +123,21 @@ conv7Per = Convolution2D(32, (5, 5), activation='relu', padding='same')(conv7Per
 conv10Per = Convolution2D(2, (5, 5), activation='linear',padding='same')(conv7Per)
 
 
-model = Model( inputs=[inputs11,inputs22], outputs=[conv10,conv10Per], )
+model = Model( inputs=[inputs11,inputs22,inputs33,inputs44], outputs=[conv10,conv10Per] )
 
 #    return model
 
 #model = stn()
 model.summary()
-def lossNew(y_pred,y_true):
-    o1,o2=y_pred
-    i1,i2=y_true
-    lab=0.5
-    loss = K.mean(lab*tf.keras.losses.MeanSquaredError(o1, i1) + (1-lab)*tf.keras.losses.mean_absolute_error(o2,i2),axis=-1)
+#def lossNew(y_pred,y_true):
+#    o1,o2=y_pred[0]
+#    i1,i2=y_true
+#    lab=0.5
+#    loss = K.mean(lab*K.square(o1, i1) + (1-lab)*K.square(o2,i2),axis=-1)
 
-#loss = K.mean(lab*tf.keras.losses.MeanSquaredError(conv10, inputs22))# + (1-lab)*tf.keras.losses.mean_absolute_error(inputs44,conv10Per))
-#model.add_loss(loss)
-model.compile(loss=lossNew,optimizer='adam')
+loss = K.mean(lab*K.square(conv10-inputs33) + (1-lab)*K.square(inputs44-conv10Per),axis=-1)
+model.add_loss(loss)
+model.compile(optimizer='adam')
 model.summary()
 
 
@@ -217,19 +220,21 @@ for loop in fileList_trainImper:
       x_val= Z[trainN+lead:np.size(Z,0)-lead,:,:,:]
       Perx_val= Pery_train[trainN+lead:np.size(Z,0)-lead,:,:,:]
       y_val= Z[trainN+lead*2:np.size(Z,0),:,:,:]
-      Pery_val=Pery_train[trainN+lead*2:np.size(Z,0),:,:,:]
-
-
+      Pery_val=Pery_train[trainN+lead*2:np.size(Pery_train,0),:,:,:]
+      
+      dummy1= np.zeros( ( ( np.size(ImPerx_train,0) , np.size(ImPerx_train,1) , np.size(ImPerx_train,2) ,2 ) ) )
+      dummy2= np.zeros( ( ( np.size(x_val,0) , np.size(x_val,1) , np.size(x_val,2) ,2 ) ) )
+      
       if (count>0 or cc>0):
 
           model = stn()
-          model.compile(loss='mse', optimizer='adam')
+          model.compile(optimizer='adam')
           model.load_weights('Multibest_weights_lead1.h5')
-          hist = model.fit([ImPerx_train, Perx_train],[ImPery_train,Pery_train],
+          hist = model.fit([ImPerx_train, Perx_train,ImPery_train,Pery_train],dummy1,
                         batch_size = batch_size,
                 verbose=1,
                 epochs = 20,
-                validation_data=([x_val,Perx_val],[y_val,Pery_val]),shuffle=True,
+                validation_data=([x_val,Perx_val,y_val,Pery_val],dummy2),shuffle=True,
                 callbacks=[keras.callbacks.EarlyStopping(monitor='val_loss',
                                             min_delta=0,
                                             patience=5, # just to make sure we use a lot of patience before stopping
@@ -239,11 +244,11 @@ for loop in fileList_trainImper:
                                                         save_weights_only=True, mode='auto', period=1),history]
                 )
       else:
-          hist = model.fit([ImPerx_train, Perx_train],[ImPery_train,Pery_train],
+          hist = model.fit([ImPerx_train, Perx_train,ImPery_train,Pery_train],dummy1,
                         batch_size = batch_size,
               verbose=1,
               epochs = 20,
-              validation_data=([x_val,Perx_val],[y_val,Pery_val]),shuffle=True,
+              validation_data=([x_val,Perx_val,y_val,Pery_val],dummy2),shuffle=True)
               callbacks=[keras.callbacks.EarlyStopping(monitor='val_loss',
                                            min_delta=0,
                                            patience=5, # just to make sure we use a lot of patience before stopping
@@ -257,11 +262,6 @@ for loop in fileList_trainImper:
       spinup=spinup+interval
     count=count+1
 	
-model = stn()
-loss = K.mean(lab*mse(conv10, inputs3) + (1-lab)*mae(inputs2,conv10Per))
-model.add_loss(loss)
-model.compile(optimizer='adam')
-model.summary()
 
 lead=1
 model.load_weights('Multibest_weights_lead' + str(lead) + '.h5')
@@ -314,10 +314,10 @@ for loop in fileList_testPer:
 
             for k in range (0, testN):
                 if(k==0):
-                  o1,o2=model.predict(x_test[k,:,:,:].reshape([1,ny,nx,2]),x_test[k,:,:,:].reshape([1,ny,nx,2])).reshape([ny,nx,2])
+                  o1,o2=model.predict(x_test[k,:,:,:].reshape([1,ny,nx,2]),x_test[k,:,:,:].reshape([1,ny,nx,2]),,x_test[k,:,:,:].reshape([1,ny,nx,2]),,x_test[k,:,:,:].reshape([1,ny,nx,2])).reshape([ny,nx,2])
                   pred[k,:,:,:]=o1
                 else:
-                  o1,o2=model.predict(pred[k-1,:,:,:].reshape([1,ny,nx,2]),pred[k-1,:,:,:].reshape([1,ny,nx,2])).reshape([ny,nx,2])
+                  o1,o2=model.predict(pred[k-1,:,:,:].reshape([1,ny,nx,2]),pred[k-1,:,:,:].reshape([1,ny,nx,2]),,pred[k-1,:,:,:].reshape([1,ny,nx,2]),,pred[k-1,:,:,:].reshape([1,ny,nx,2])).reshape([ny,nx,2])
                   pred[k,:,:,:]=o1
 
             count+=1
